@@ -5,26 +5,44 @@ import { ScanResult } from "../types/ScanResult";
 
 export class RepositoryScanner {
 
+    private readonly ignoredDirectories = new Set([
+        ".git",
+        ".github",
+        ".vscode",
+        "node_modules",
+        "venv",
+        ".venv",
+        "__pycache__",
+        "dist",
+        "build",
+        "out",
+        "bin",
+        "obj",
+        "coverage",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".idea"
+    ]);
+
     public scan(): ScanResult {
 
         const workspace = vscode.workspace.workspaceFolders;
 
-        if (!workspace) {
+        if (!workspace || workspace.length === 0) {
             throw new Error("No workspace is open.");
         }
 
-        const root = workspace[0].uri.fsPath;
+        const rootPath = workspace[0].uri.fsPath;
 
         const languageMap = new Map<string, number>();
-
         let totalFiles = 0;
 
-        this.walk(root, languageMap, () => {
+        this.walk(rootPath, languageMap, () => {
             totalFiles++;
         });
 
         return {
-            rootPath: root,
+            rootPath,
             totalFiles,
             languages: [...languageMap.entries()]
                 .map(([language, count]) => ({
@@ -36,57 +54,46 @@ export class RepositoryScanner {
     }
 
     private walk(
-        dir: string,
+        directory: string,
         languageMap: Map<string, number>,
-        increment: () => void
-    ) {
+        incrementFileCount: () => void
+    ): void {
 
-        const ignore = new Set([
-            ".git",
-            "node_modules",
-            "venv",
-            "__pycache__",
-            "dist",
-            "build"
-        ]);
-
-        const items = fs.readdirSync(dir);
+        const items = fs.readdirSync(directory);
 
         for (const item of items) {
 
-            if (ignore.has(item))
+            if (this.ignoredDirectories.has(item)) {
                 continue;
-
-            const full = path.join(dir, item);
-
-            const stat = fs.statSync(full);
-
-            if (stat.isDirectory()) {
-                this.walk(full, languageMap, increment);
             }
-            else {
 
-                increment();
+            const fullPath = path.join(directory, item);
+            const stats = fs.statSync(fullPath);
 
-                const ext = path.extname(item);
-
-                const lang = this.detectLanguage(ext);
-
-                if (!lang)
-                    continue;
-
-                languageMap.set(
-                    lang,
-                    (languageMap.get(lang) ?? 0) + 1
-                );
+            if (stats.isDirectory()) {
+                this.walk(fullPath, languageMap, incrementFileCount);
+                continue;
             }
+
+            incrementFileCount();
+
+            const extension = path.extname(item).toLowerCase();
+            const language = this.detectLanguage(extension);
+
+            if (!language) {
+                continue;
+            }
+
+            languageMap.set(
+                language,
+                (languageMap.get(language) ?? 0) + 1
+            );
         }
-
     }
 
-    private detectLanguage(ext: string): string | null {
+    private detectLanguage(extension: string): string | null {
 
-        switch (ext) {
+        switch (extension) {
 
             case ".py":
                 return "Python";
@@ -94,13 +101,15 @@ export class RepositoryScanner {
             case ".java":
                 return "Java";
 
+            case ".c":
+                return "C";
+
             case ".cpp":
             case ".cc":
             case ".cxx":
+            case ".hpp":
+            case ".h":
                 return "C++";
-
-            case ".c":
-                return "C";
 
             case ".js":
                 return "JavaScript";
@@ -108,10 +117,63 @@ export class RepositoryScanner {
             case ".ts":
                 return "TypeScript";
 
+            case ".tsx":
+                return "React (TypeScript)";
+
+            case ".jsx":
+                return "React (JavaScript)";
+
+            case ".go":
+                return "Go";
+
+            case ".rs":
+                return "Rust";
+
+            case ".cs":
+                return "C#";
+
+            case ".kt":
+                return "Kotlin";
+
+            case ".swift":
+                return "Swift";
+
+            case ".php":
+                return "PHP";
+
+            case ".rb":
+                return "Ruby";
+
+            case ".scala":
+                return "Scala";
+
+            case ".r":
+                return "R";
+
+            case ".sql":
+                return "SQL";
+
+            case ".html":
+                return "HTML";
+
+            case ".css":
+                return "CSS";
+
+            case ".json":
+                return "JSON";
+
+            case ".xml":
+                return "XML";
+
+            case ".yaml":
+            case ".yml":
+                return "YAML";
+
+            case ".md":
+                return "Markdown";
+
             default:
                 return null;
         }
-
     }
-
 }
